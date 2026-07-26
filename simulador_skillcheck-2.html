@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador Skill Check - Reparar Generador</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; user-select:none; }
+  html, body {
+    width:100%; height:100%; overflow:hidden;
+    background: radial-gradient(ellipse at center, #2a2118 0%, #0f0c08 70%, #000 100%);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    touch-action: manipulation;
+  }
+  #app {
+    position:relative;
+    width:100%; height:100%;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+  }
+
+  /* ---------- HUD superior ---------- */
+  #topbar {
+    position:absolute; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 14px 16px;
+    z-index: 30;
+  }
+  #topbar .stat {
+    color:#eee; font-size:13px; background:rgba(0,0,0,0.45);
+    padding:6px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.15);
+  }
+  #topbar .stat b { color:#fff; }
+  #gearBtn {
+    background:rgba(0,0,0,0.45); border:1px solid rgba(255,255,255,0.2);
+    color:#fff; border-radius:8px; width:38px; height:38px; font-size:18px;
+    cursor:pointer;
+  }
+
+  /* ---------- Zona del skill check (círculo) ---------- */
+  #wheelWrap {
+    position:relative;
+    width: min(78vw, 380px);
+    height: min(78vw, 380px);
+    display:flex; align-items:center; justify-content:center;
+  }
+  svg#dial { width:100%; height:100%; overflow:visible; }
+
+  #keyIcon {
+    position:absolute;
+    width: 34%; height: 20%;
+    background: rgba(15,15,15,0.92);
+    border: 3px solid rgba(255,255,255,0.9);
+    border-radius: 10px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 0 18px rgba(0,0,0,0.6) inset;
+  }
+  #keyIcon svg { width: 46%; }
+
+  /* ---------- Barra REPARAR ---------- */
+  #barSection {
+    position:absolute;
+    bottom: 8%;
+    width: min(86vw, 460px);
+    left:50%; transform:translateX(-50%);
+  }
+  #barLabel {
+    color:#fff; font-weight:800; font-size: 15px;
+    letter-spacing:2px; margin-bottom:6px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+  }
+  #barOuter {
+    width:100%; height: 22px;
+    background: rgba(10,10,10,0.85);
+    border-radius: 11px;
+    border: 2px solid rgba(255,255,255,0.25);
+    overflow:hidden;
+    position:relative;
+  }
+  #barFill {
+    height:100%; width:0%;
+    background: linear-gradient(90deg, #d8d8d8, #ffffff);
+    border-radius: 11px 0 0 11px;
+    transition: width 0.15s linear;
+  }
+  #barFill.exploded { background: linear-gradient(90deg,#7a1414,#3a0808); }
+
+  /* ---------- Mensajes flotantes de resultado ---------- */
+  #flashMsg {
+    position:absolute; top: 20%; left:50%; transform:translateX(-50%);
+    font-size: 30px; font-weight:900; letter-spacing:1px;
+    opacity:0; pointer-events:none;
+    text-shadow: 0 0 14px rgba(0,0,0,0.85), 0 2px 4px rgba(0,0,0,0.9);
+    z-index: 25;
+    transition: none;
+  }
+
+  /* ---------- Panel de config ---------- */
+  #configPanel {
+    position:absolute; inset:0;
+    background: rgba(6,6,8,0.94);
+    z-index: 60;
+    display:flex; align-items:center; justify-content:center;
+    padding: 20px;
+    overflow-y:auto;
+  }
+  #configPanel.hidden { display:none; }
+  #configBox {
+    width: min(92vw, 460px);
+    background: #17140f;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    padding: 22px 22px 26px;
+    color:#eee;
+    max-height: 92vh;
+    overflow-y:auto;
+  }
+  #configBox h2 {
+    font-size:19px; margin-bottom: 4px; color:#fff;
+  }
+  #configBox .sub { font-size:12px; color:#999; margin-bottom:18px; }
+  .cfgRow { margin-bottom: 18px; }
+  .cfgRow label {
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size: 13px; color:#ccc; margin-bottom:8px;
+  }
+  .cfgRow label .val { color:#fff; font-weight:700; }
+  input[type=range] {
+    width:100%; -webkit-appearance:none; height:6px; border-radius:3px;
+    background: linear-gradient(90deg,#444,#888);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none; width:20px; height:20px; border-radius:50%;
+    background:#fff; border:2px solid #333; cursor:pointer;
+    box-shadow:0 0 6px rgba(0,0,0,0.5);
+  }
+  .toggleRow {
+    display:flex; justify-content:space-between; align-items:center;
+    background: rgba(255,255,255,0.04);
+    border-radius:10px; padding: 10px 14px; margin-bottom: 12px;
+  }
+  .toggleRow .lbl { font-size:13.5px; color:#ddd; }
+  .toggleRow .desc { font-size:11px; color:#888; margin-top:2px; }
+  .switch { position:relative; width:46px; height:26px; flex-shrink:0; margin-left:12px; }
+  .switch input { opacity:0; width:0; height:0; }
+  .slider2 {
+    position:absolute; cursor:pointer; inset:0;
+    background:#3a3a3a; border-radius:26px; transition:.2s;
+  }
+  .slider2:before {
+    position:absolute; content:""; height:20px; width:20px; left:3px; top:3px;
+    background:white; border-radius:50%; transition:.2s;
+  }
+  input:checked + .slider2 { background:#c0392b; }
+  input:checked + .slider2:before { transform:translateX(20px); }
+
+  .presetGrid {
+    display:grid; grid-template-columns: repeat(4,1fr); gap:6px; margin-top:6px;
+  }
+  .presetBtn {
+    background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
+    color:#ccc; font-size:11px; padding:6px 2px; border-radius:6px; cursor:pointer;
+  }
+  .presetBtn.active { background:#c0392b; border-color:#c0392b; color:#fff; }
+
+  #startBtn {
+    width:100%; padding: 14px; margin-top: 18px;
+    background: linear-gradient(180deg,#e74c3c,#a93226);
+    border:none; border-radius: 10px; color:#fff; font-size:16px; font-weight:800;
+    letter-spacing:1px; cursor:pointer;
+  }
+  #resetStatsBtn {
+    width:100%; padding: 10px; margin-top: 10px;
+    background: transparent; border:1px solid rgba(255,255,255,0.2);
+    border-radius: 10px; color:#aaa; font-size:12.5px; cursor:pointer;
+  }
+
+  /* ---------- Overlay de explosión ---------- */
+  #explodeOverlay {
+    position:absolute; inset:0; z-index: 55;
+    background: rgba(120,0,0,0.0);
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:none;
+  }
+  #explodeOverlay.show { pointer-events:all; }
+  #explodePanel {
+    background: rgba(15,10,10,0.95); border:1px solid rgba(255,80,80,0.4);
+    border-radius:14px; padding: 26px 24px; text-align:center;
+    width: min(85vw, 360px);
+    opacity:0; transform: scale(0.9);
+  }
+  #explodePanel h3 { color:#ff5c5c; font-size:20px; margin-bottom:8px; letter-spacing:1px;}
+  #explodePanel p { color:#ccc; font-size:13px; margin-bottom:16px; }
+  #retryBtn, #backToConfigBtn {
+    width:100%; padding:12px; border:none; border-radius:9px; font-weight:700; font-size:14px; cursor:pointer; margin-top:8px;
+  }
+  #retryBtn { background:#e74c3c; color:#fff; }
+  #backToConfigBtn { background:transparent; border:1px solid rgba(255,255,255,0.25); color:#ccc; }
+
+  /* ---------- Resultado final (completado) ---------- */
+  #finishOverlay {
+    position:absolute; inset:0; z-index: 55;
+    background: rgba(0,0,0,0.75);
+    display:none; align-items:center; justify-content:center;
+  }
+  #finishOverlay.show { display:flex; }
+  #finishPanel {
+    background:#141210; border:1px solid rgba(255,255,255,0.15);
+    border-radius:14px; padding:26px 24px; text-align:center;
+    width:min(85vw,360px);
+  }
+  #finishPanel h3 { color:#7CFC9A; font-size:21px; margin-bottom:14px; }
+  #finishStats { text-align:left; font-size:13.5px; color:#ddd; line-height:1.9; margin-bottom:16px;}
+  #finishStats b { color:#fff; }
+  #finishStats .accGood { color:#7CFC9A; }
+  #finishStats .accBad { color:#ff8080; }
+
+  /* ---------- Overlay de pausa (perdida de foco) ---------- */
+  #pauseOverlay {
+    position:absolute; inset:0; z-index: 55;
+    background: rgba(0,0,0,0.8);
+    display:none; align-items:center; justify-content:center;
+  }
+  #pauseOverlay.show { display:flex; }
+  #pausePanel {
+    background:#141210; border:1px solid rgba(255,255,255,0.15);
+    border-radius:14px; padding:26px 24px; text-align:center;
+    width:min(85vw,360px);
+  }
+  #pausePanel h3 { color:#f0c419; font-size:20px; margin-bottom:8px; }
+  #pausePanel p { color:#ccc; font-size:13px; margin-bottom:18px; }
+  #resumeBtn {
+    width:100%; padding:12px; border:none; border-radius:9px;
+    font-weight:700; font-size:14px; cursor:pointer;
+    background:#f0c419; color:#1a1608;
+  }
+
+  #hudGear {
+    position:fixed; bottom:14px; right:14px; z-index:70;
+    background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2);
+    color:#fff; width:42px; height:42px; border-radius:50%; font-size:18px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+
+  /* ---------- Capturador de toque de pantalla completa ----------
+     Cubre toda la pantalla para que el jugador pueda presionar en
+     cualquier punto (sin taparse la aguja con el dedo). El area
+     alrededor del boton de ajustes queda excluida via JS (chequeo
+     de distancia), no con CSS, para que no dependa de z-index ni
+     de que el overlay de config este visible o no. */
+  #touchCapture {
+    position:fixed; inset:0; z-index: 20;
+    /* z-index bajo: topbar (30), flashMsg (25 pero pointer-events:none),
+       overlays de config/explosion/final (55-60) y el engranaje (70)
+       siguen arriba y reciben su propio toque primero cuando aplica */
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div id="touchCapture"></div>
+
+  <div id="topbar">
+    <div class="stat">Racha: <b id="streakVal">0</b></div>
+    <div class="stat">Errores: <b id="errVal">0</b></div>
+  </div>
+
+  <div id="wheelWrap">
+    <svg id="dial" viewBox="0 0 300 300">
+      <!-- pista base (delgada, gris) -->
+      <circle id="trackBase" cx="150" cy="150" r="128" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="10" />
+      <!-- zona de éxito (arco blanco grueso) -->
+      <path id="successArc" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="butt" />
+      <!-- aguja roja -->
+      <g id="needleGroup">
+        <line id="needleLine" x1="150" y1="150" x2="150" y2="30" stroke="#ff2020" stroke-width="5" stroke-linecap="round"/>
+        <polygon id="needleTip" points="150,26 145,36 155,36" fill="#ff2020"/>
+        <circle cx="150" cy="150" r="7" fill="#ff2020" stroke="#fff" stroke-width="1.5"/>
+      </g>
+    </svg>
+    <div id="keyIcon">
+      <svg viewBox="0 0 100 60"><path d="M15 20 L15 45 L85 45 L85 20" fill="none" stroke="white" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+
+  <div id="flashMsg"></div>
+
+  <div id="barSection">
+    <div id="barLabel">REPARAR</div>
+    <div id="barOuter"><div id="barFill"></div></div>
+  </div>
+
+  <div id="hudGear" onclick="openConfig()">⚙️</div>
+</div>
+
+<!-- Overlay explosión -->
+<div id="explodeOverlay">
+  <div id="explodePanel">
+    <h3>💥 GENERADOR EXPLOTÓ</h3>
+    <p>Fallaste la prueba y el progreso se detuvo.</p>
+    <div style="font-size:12.5px;color:#999;margin-bottom:6px;">Errores en este intento: <b id="explodeErrCount" style="color:#ff8080;">0</b></div>
+    <button id="retryBtn" onclick="retryAfterExplosion()">Reintentar</button>
+    <button id="backToConfigBtn" onclick="openConfig()">Cambiar configuración</button>
+  </div>
+</div>
+
+<!-- Overlay de completado -->
+<div id="finishOverlay">
+  <div id="finishPanel">
+    <h3>✅ GENERADOR REPARADO</h3>
+    <div id="finishStats"></div>
+    <button id="retryBtn2" onclick="restartRun()" style="width:100%;padding:12px;border:none;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;background:#2ecc71;color:#0b0b0b;">Reintentar</button>
+    <button onclick="openConfig()" style="width:100%;padding:10px;margin-top:8px;border:1px solid rgba(255,255,255,0.25);background:transparent;border-radius:9px;color:#ccc;font-size:13px;cursor:pointer;">Cambiar configuración</button>
+  </div>
+</div>
+
+<!-- Overlay de pausa por perdida de foco (cambio de app, bloqueo de pantalla, etc) -->
+<div id="pauseOverlay">
+  <div id="pausePanel">
+    <h3>⏸ PAUSADO</h3>
+    <p>La práctica se pausó porque saliste de la pantalla. No se cuenta como error.</p>
+    <button id="resumeBtn" onclick="resumeFromPause()">Continuar</button>
+  </div>
+</div>
+
+<!-- Panel de configuración -->
+<div id="configPanel">
+  <div id="configBox">
+    <h2>Simulador de Skill Check</h2>
+    <div class="sub">Ajusta la dificultad y practica el timing exacto</div>
+
+    <div class="cfgRow">
+      <label>Nivel de frecuencia <span class="val" id="freqLabel">8 / 16</span></label>
+      <input type="range" id="freqSlider" min="1" max="16" value="8" oninput="updateFreqLabel()">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#777;margin-top:4px;">
+        <span>Lento / fácil de ver</span><span>Nivel 16: casi invisible</span>
+      </div>
+    </div>
+
+    <div class="cfgRow">
+      <label>Tamaño de la zona de éxito <span class="val" id="zoneLabel">30°</span></label>
+      <input type="range" id="zoneSlider" min="8" max="60" value="30" oninput="updateZoneLabel()">
+    </div>
+
+    <div class="cfgRow">
+      <label>Variabilidad de la velocidad de la aguja <span class="val" id="speedVarLabel">Normal</span></label>
+      <input type="range" id="speedVarSlider" min="1" max="4" value="1" step="1" oninput="updateSpeedVarLabel()">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#777;margin-top:4px;">
+        <span>Constante (como siempre)</span><span>Varía mucho</span>
+      </div>
+    </div>
+
+    <div class="cfgRow">
+      <label>Aparición de la prueba (aleatoriedad) <span class="val" id="randLabel">Media</span></label>
+      <input type="range" id="randSlider" min="1" max="3" value="2" oninput="updateRandLabel()">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#777;margin-top:4px;">
+        <span>Predecible</span><span>Muy aleatorio</span>
+      </div>
+    </div>
+
+    <div class="toggleRow">
+      <div>
+        <div class="lbl">Modo explosión</div>
+        <div class="desc">Si fallas, se detiene la prueba (como en el juego real)</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="explodeToggle">
+        <span class="slider2"></span>
+      </label>
+    </div>
+
+    <div class="toggleRow">
+      <div>
+        <div class="lbl">Vibración (si el dispositivo lo soporta)</div>
+        <div class="desc">Vibra al acertar y al fallar</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="vibrateToggle" checked>
+        <span class="slider2"></span>
+      </label>
+    </div>
+
+    <div class="toggleRow">
+      <div>
+        <div class="lbl">Sonido</div>
+        <div class="desc">"Ping" al empezar cada prueba, y un tono distinto al acertar o fallar</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="soundToggle" checked>
+        <span class="slider2"></span>
+      </label>
+    </div>
+
+    <div class="cfgRow">
+      <label>Presets rápidos</label>
+      <div class="presetGrid">
+        <div class="presetBtn" data-preset="1">Fácil</div>
+        <div class="presetBtn" data-preset="2">Normal</div>
+        <div class="presetBtn" data-preset="3">Difícil</div>
+        <div class="presetBtn" data-preset="4">Nivel 16</div>
+      </div>
+    </div>
+
+    <button id="startBtn" onclick="startFromConfig()">Comenzar práctica</button>
+    <button id="resetStatsBtn" onclick="resetAllStats()">Reiniciar estadísticas globales</button>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   SIMULADOR DE SKILL CHECK - Distrito de Violencia / Dead by Daylight
+   Practica de timing: aguja rotando + zona de exito + tecla espacio
+   ===================================================================== */
+
+const CENTER = {x:150, y:150};
+const RADIUS = 128;
+
+// ---------- Estado global ----------
+let state = {
+  running: false,
+  angle: 0,             // angulo actual de la aguja en grados, 0 = arriba, sentido horario
+  speed: 0,              // grados por frame
+  successStart: 0,       // angulo inicio zona exito
+  successSize: 30,       // tamaño en grados
+  progress: 0,           // 0-100
+  streak: 0,
+  totalErrors: 0,
+  explodeMode: false,
+  vibrateOn: true,
+  soundOn: true,
+  freqLevel: 8,
+  speedVarLevel: 1,      // 1-4: nivel de variabilidad de la velocidad de la aguja
+  speedPhase: 0,          // fase aleatoria de la ondulacion, sorteada en cada check
+  randMode: 2,
+  rafId: null,
+  waitingForCheck: false,   // true mientras la aguja gira y se puede presionar
+  stillPhase: false,        // true durante el breve instante en que la aguja aun no se mueve
+  stillPhaseTimeout: null,
+  nextCheckTimeout: null,
+  exploded: false,
+  pausedForFocus: false,    // true si la practica se detuvo por perdida de foco (no cuenta como error)
+  checksTotal: 0,
+  checksHit: 0,
+};
+
+// ---------- Referencias DOM ----------
+const successArc = document.getElementById('successArc');
+const needleGroup = document.getElementById('needleGroup');
+const barFill = document.getElementById('barFill');
+const flashMsg = document.getElementById('flashMsg');
+const streakVal = document.getElementById('streakVal');
+const errVal = document.getElementById('errVal');
+const configPanel = document.getElementById('configPanel');
+const explodeOverlay = document.getElementById('explodeOverlay');
+const finishOverlay = document.getElementById('finishOverlay');
+const pauseOverlay = document.getElementById('pauseOverlay');
+
+// ---------- Utilidades ----------
+function polarToXY(angleDeg, r) {
+  // angulo 0 = arriba (12 en punto), sentido horario
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  return { x: CENTER.x + r * Math.cos(rad), y: CENTER.y + r * Math.sin(rad) };
+}
+
+function describeArc(startAngle, sweepAngle, r) {
+  // dibuja un arco desde startAngle hasta startAngle+sweepAngle (sentido horario)
+  const endAngle = startAngle + sweepAngle;
+  const start = polarToXY(startAngle, r);
+  const end = polarToXY(endAngle, r);
+  const largeArc = sweepAngle > 180 ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
+}
+
+function vibrate(pattern) {
+  if (state.vibrateOn && navigator.vibrate) {
+    try { navigator.vibrate(pattern); } catch(e) {}
+  }
+}
+
+// ---------- Audio: "ping" de aviso al iniciar cada skill check ----------
+// Sonido generado con Web Audio API (no es un archivo de audio ni un asset
+// extraido de ningun juego): un tono corto, agudo y con caida rapida, en el
+// mismo estilo que el aviso sonoro de las pruebas de habilidad de Dead by
+// Daylight y sus derivados (un "ping" de notificacion breve, no una melodia).
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    audioCtx = new AC();
+  }
+  // los navegadores moviles suspenden el contexto hasta la primera interaccion;
+  // se intenta reanudar cada vez, es una operacion segura y barata si ya esta activo
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(()=>{});
+  }
+  return audioCtx;
+}
+
+function playSkillCheckPing() {
+  if (!state.soundOn) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+
+    // Tono principal: un "ping" corto y agudo, con caida rapida de volumen
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1400, now);
+    osc.frequency.exponentialRampToValueAtTime(950, now + 0.09);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.35, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.18);
+
+    // Segundo armonico suave, un poco mas agudo, para dar el "brillo metalico"
+    // caracteristico de este tipo de aviso (campanita/notificacion), no una nota musical
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(2100, now);
+    gain2.gain.setValueAtTime(0.0001, now);
+    gain2.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now);
+    osc2.stop(now + 0.12);
+  } catch(e) {
+    // si el audio falla por cualquier motivo, la practica sigue funcionando igual
+  }
+}
+
+function playHitSound() {
+  if (!state.soundOn) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    // Tono ascendente corto: sensacion de acierto/satisfaccion
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(700, now);
+    osc.frequency.exponentialRampToValueAtTime(1150, now + 0.09);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.3, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.15);
+  } catch(e) {}
+}
+
+function playMissSound() {
+  if (!state.soundOn) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    // Tono grave descendente, tipo "buzz": sensacion de error, no una nota musical
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(120, now + 0.2);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.22, now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.24);
+  } catch(e) {}
+}
+
+// Desbloqueo del audio en la primera interaccion del usuario, requerido por
+// las politicas de autoplay de navegadores moviles (Safari/Chrome Android).
+function unlockAudioOnce() {
+  getAudioCtx();
+  window.removeEventListener('touchstart', unlockAudioOnce);
+  window.removeEventListener('mousedown', unlockAudioOnce);
+  window.removeEventListener('keydown', unlockAudioOnce);
+}
+window.addEventListener('touchstart', unlockAudioOnce, {passive:true});
+window.addEventListener('mousedown', unlockAudioOnce);
+window.addEventListener('keydown', unlockAudioOnce);
+
+// ---------- Mapeo de nivel de frecuencia (1-16) a velocidad de la aguja ----------
+// Nivel 1: lenta y facil de ver. Nivel 16: gira tan rapido que casi no se ve.
+function speedFromFreqLevel(lvl) {
+  // grados por frame a 60fps aproximadamente
+  // nivel 1 -> vuelta completa en ~5.5s ; nivel 16 -> vuelta completa en ~0.35s
+  const minTime = 0.35; // segundos para una vuelta completa en el nivel maximo
+  const maxTime = 5.5;  // segundos para una vuelta completa en el nivel minimo
+  const t = maxTime - (maxTime - minTime) * ((lvl - 1) / 15);
+  const degPerSec = 360 / t;
+  return degPerSec / 60; // por frame, asumiendo ~60fps
+}
+
+// ---------- Variabilidad de la velocidad de la aguja (4 niveles) ----------
+// La velocidad no es un valor fijo durante el giro: se modula con una
+// ondulacion suave tipo seno (acelera y desacelera), no con ruido aleatorio
+// frame a frame (eso se veria como tembleque en vez de variacion fluida).
+// amplitud = 0 replica el comportamiento original (velocidad constante).
+const SPEED_VARIABILITY_AMPLITUDE = {
+  1: 0.00,  // Normal: identico a como funcionaba antes, sin variacion
+  2: 0.12,  // Poco variable: oscila entre 88% y 112% de la velocidad base, casi no se nota
+  3: 0.30,  // Bastante variable: oscila entre 70% y 130%, se percibe claramente
+  4: 0.55,  // Varia mucho: oscila entre 45% y 155%, cambios de ritmo fuertes
+};
+// cuantos ciclos completos de aceleracion/desaceleracion caben en una vuelta de 360 grados
+const SPEED_VARIABILITY_CYCLES_PER_LAP = 2.5;
+
+// ---------- Configuracion de UI ----------
+function updateFreqLabel() {
+  document.getElementById('freqLabel').textContent = document.getElementById('freqSlider').value + ' / 16';
+  clearPresetActive();
+}
+function updateZoneLabel() {
+  document.getElementById('zoneLabel').textContent = document.getElementById('zoneSlider').value + '°';
+  clearPresetActive();
+}
+function updateSpeedVarLabel() {
+  const v = parseInt(document.getElementById('speedVarSlider').value);
+  const labels = {1:'Normal', 2:'Poco variable', 3:'Bastante variable', 4:'Varía mucho'};
+  document.getElementById('speedVarLabel').textContent = labels[v];
+  clearPresetActive();
+}
+function updateRandLabel() {
+  const v = parseInt(document.getElementById('randSlider').value);
+  const labels = {1:'Baja', 2:'Media', 3:'Alta'};
+  document.getElementById('randLabel').textContent = labels[v];
+  clearPresetActive();
+}
+function clearPresetActive() {
+  document.querySelectorAll('.presetBtn').forEach(b=>b.classList.remove('active'));
+}
+
+document.querySelectorAll('.presetBtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    clearPresetActive();
+    btn.classList.add('active');
+    const p = btn.dataset.preset;
+    if (p==='1') { setSliders(3, 45, 1); }
+    if (p==='2') { setSliders(8, 30, 2); }
+    if (p==='3') { setSliders(13, 18, 3); }
+    if (p==='4') { setSliders(16, 12, 3); }
+  });
+});
+function setSliders(freq, zone, rand) {
+  document.getElementById('freqSlider').value = freq;
+  document.getElementById('zoneSlider').value = zone;
+  document.getElementById('randSlider').value = rand;
+  // los presets rapidos dejan la variabilidad de velocidad en "Normal": es un
+  // ajuste independiente que el jugador puede activar aparte si lo quiere,
+  // no algo que un preset de dificultad deba imponer sin avisar
+  document.getElementById('speedVarSlider').value = 1;
+  updateFreqLabel(); updateZoneLabel(); updateRandLabel(); updateSpeedVarLabel();
+  // como estos programaticamente llaman clearPresetActive, lo re-marcamos despues
+}
+// re-marcar preset activo tras click (porque los updates internos lo limpian)
+document.querySelectorAll('.presetBtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{ btn.classList.add('active'); });
+});
+
+function openConfig() {
+  stopLoop();
+  finishOverlay.classList.remove('show');
+  explodeOverlay.classList.remove('show');
+  pauseOverlay.classList.remove('show');
+  configPanel.classList.remove('hidden');
+}
+
+function startFromConfig() {
+  state.freqLevel = parseInt(document.getElementById('freqSlider').value);
+  state.successSize = parseInt(document.getElementById('zoneSlider').value);
+  state.speedVarLevel = parseInt(document.getElementById('speedVarSlider').value);
+  state.randMode = parseInt(document.getElementById('randSlider').value);
+  state.explodeMode = document.getElementById('explodeToggle').checked;
+  state.vibrateOn = document.getElementById('vibrateToggle').checked;
+  state.soundOn = document.getElementById('soundToggle').checked;
+
+  configPanel.classList.add('hidden');
+  restartRun();
+}
+
+function restartRun() {
+  finishOverlay.classList.remove('show');
+  explodeOverlay.classList.remove('show');
+  pauseOverlay.classList.remove('show');
+  state.progress = 0;
+  state.streak = 0;
+  state.totalErrors = 0;
+  state.checksTotal = 0;
+  state.checksHit = 0;
+  state.exploded = false;
+  state.pausedForFocus = false;
+  barFill.style.width = '0%';
+  barFill.classList.remove('exploded');
+  streakVal.textContent = '0';
+  errVal.textContent = '0';
+  startLoop();
+}
+
+function resetAllStats() {
+  state.totalErrors = 0;
+  state.streak = 0;
+  errVal.textContent = '0';
+  streakVal.textContent = '0';
+}
+
+// ---------- Bucle del juego ----------
+function startLoop() {
+  cancelAnimationFrame(state.rafId);
+  clearTimeout(state.nextCheckTimeout);
+  state.running = true;
+  state.waitingForCheck = false;
+  scheduleNextCheck(true);
+  loop();
+}
+function stopLoop() {
+  state.running = false;
+  cancelAnimationFrame(state.rafId);
+  clearTimeout(state.nextCheckTimeout);
+  clearTimeout(state.stillPhaseTimeout);
+}
+
+function randomDelayForMode() {
+  // rango base en ms, segun randMode (1 baja, 2 media, 3 alta variabilidad)
+  const base = 1400; // tiempo promedio entre checks
+  if (state.randMode === 1) return base + (Math.random()*400 - 200);       // poca variacion
+  if (state.randMode === 2) return base + (Math.random()*1600 - 800);      // variacion media
+  return 400 + Math.random()*2600;                                        // alta variacion, puede ser muy rapido o lento
+}
+
+function scheduleNextCheck(immediate) {
+  const delay = immediate ? 300 : randomDelayForMode();
+  state.nextCheckTimeout = setTimeout(()=>{
+    triggerCheck();
+  }, delay);
+}
+
+// Tiempo fijo (ms) que la prueba permanece visible con la aguja quieta en 0
+// antes de que el giro arranque. Esto garantiza que el jugador siempre vea
+// donde esta la zona de exito antes del movimiento, sin importar en que
+// punto de los 360 grados haya caido la zona al azar. Sin este delay, la
+// zona podia aparecer pegada al punto de arranque (0 grados) y dejar un
+// tiempo de reaccion casi nulo incluso en el nivel de frecuencia mas facil.
+const STILL_DELAY_MS = 180;
+
+function triggerCheck() {
+  if (!state.running) return;
+  state.speed = speedFromFreqLevel(state.freqLevel);
+  state.speedPhase = Math.random() * Math.PI * 2; // fase aleatoria: cada check ondula distinto
+  state.angle = 0;
+  // posicion aleatoria de la zona de exito (sin restriccion: puede caer en
+  // cualquier punto de los 360 grados; el tiempo de reaccion se garantiza
+  // con STILL_DELAY_MS, no limitando donde puede aparecer la zona)
+  state.successStart = Math.random() * 360;
+  drawSuccessArc();
+  needleGroup.setAttribute('transform', 'rotate(0 150 150)');
+  needleGroup.style.opacity = '1';
+  successArc.style.opacity = '1';
+  playSkillCheckPing();
+
+  // la aguja queda quieta en 0 durante STILL_DELAY_MS; el jugador ya puede
+  // presionar durante este tramo (attemptPress funciona en cuanto
+  // waitingForCheck es true), solo que la aguja todavia no se movio
+  state.waitingForCheck = true;
+  state.stillPhase = true;
+  clearTimeout(state.stillPhaseTimeout);
+  state.stillPhaseTimeout = setTimeout(()=>{
+    state.stillPhase = false;
+  }, STILL_DELAY_MS);
+}
+
+function drawSuccessArc() {
+  successArc.setAttribute('d', describeArc(state.successStart, state.successSize, RADIUS));
+}
+
+function getEffectiveSpeed() {
+  const amplitude = SPEED_VARIABILITY_AMPLITUDE[state.speedVarLevel] || 0;
+  if (amplitude === 0) return state.speed; // nivel "Normal": identico a como funcionaba antes
+  const radiansPerDeg = (SPEED_VARIABILITY_CYCLES_PER_LAP * Math.PI * 2) / 360;
+  const modulation = 1 + amplitude * Math.sin(state.angle * radiansPerDeg + state.speedPhase);
+  return state.speed * modulation;
+}
+
+function loop() {
+  if (!state.running) return;
+  if (state.waitingForCheck && !state.stillPhase) {
+    state.angle += getEffectiveSpeed();
+    if (state.angle >= 360) {
+      // dio la vuelta completa sin que el jugador presionara -> se cuenta como fallo (se paso)
+      handleMiss('timeout');
+    } else {
+      needleGroup.setAttribute('transform', `rotate(${state.angle} 150 150)`);
+    }
+  }
+  state.rafId = requestAnimationFrame(loop);
+}
+
+// ---------- Deteccion de acierto/fallo ----------
+function isInSuccessZone(angle) {
+  let start = state.successStart;
+  let end = (start + state.successSize) % 360;
+  let a = ((angle % 360) + 360) % 360;
+  if (end >= start) {
+    return a >= start && a <= end;
+  } else {
+    return a >= start || a <= end;
+  }
+}
+
+function handleHit() {
+  state.waitingForCheck = false;
+  clearTimeout(state.nextCheckTimeout);
+  clearTimeout(state.stillPhaseTimeout);
+  state.checksTotal++;
+  state.checksHit++;
+  state.streak++;
+  streakVal.textContent = state.streak;
+  state.progress = Math.min(100, state.progress + (100/8)); // ~8 aciertos para completar, ajustable
+  barFill.style.width = state.progress + '%';
+  showFlash('¡BIEN!', '#7CFC9A');
+  vibrate(30);
+  playHitSound();
+  needleGroup.style.opacity = '0.15';
+  successArc.style.opacity = '0.15';
+
+  if (state.progress >= 100) {
+    finishRepair();
+  } else {
+    scheduleNextCheck(false);
+  }
+}
+
+function handleMiss(reason) {
+  state.waitingForCheck = false;
+  clearTimeout(state.nextCheckTimeout);
+  clearTimeout(state.stillPhaseTimeout);
+  state.checksTotal++;
+  state.streak = 0;
+  state.totalErrors++;
+  errVal.textContent = state.totalErrors;
+  streakVal.textContent = '0';
+  showFlash(reason === 'timeout' ? '¡SE PASÓ!' : '¡FALLASTE!', '#ff5c5c');
+  vibrate([40,40,40]);
+  playMissSound();
+  needleGroup.style.opacity = '0.15';
+  successArc.style.opacity = '0.15';
+
+  if (state.explodeMode) {
+    triggerExplosion();
+  } else {
+    scheduleNextCheck(false);
+  }
+}
+
+function triggerExplosion() {
+  stopLoop();
+  state.exploded = true;
+  barFill.classList.add('exploded');
+  document.getElementById('explodeErrCount').textContent = state.totalErrors;
+  explodeOverlay.classList.add('show');
+  const panel = document.getElementById('explodePanel');
+  panel.style.transition = 'all 0.25s ease';
+  requestAnimationFrame(()=>{ panel.style.opacity = '1'; panel.style.transform = 'scale(1)'; });
+}
+
+function retryAfterExplosion() {
+  explodeOverlay.classList.remove('show');
+  const panel = document.getElementById('explodePanel');
+  panel.style.opacity = '0'; panel.style.transform = 'scale(0.9)';
+  state.progress = 0;
+  barFill.style.width = '0%';
+  barFill.classList.remove('exploded');
+  startLoop();
+}
+
+function finishRepair() {
+  stopLoop();
+  const acc = state.checksTotal > 0 ? Math.round((state.checksHit/state.checksTotal)*100) : 100;
+  const statsDiv = document.getElementById('finishStats');
+  statsDiv.innerHTML = `
+    Pruebas totales: <b>${state.checksTotal}</b><br>
+    Aciertos: <b>${state.checksHit}</b><br>
+    Errores en este intento: <b>${state.totalErrors}</b><br>
+    Precisión: <b class="${acc>=70?'accGood':'accBad'}">${acc}%</b><br>
+    Nivel de frecuencia usado: <b>${state.freqLevel} / 16</b>
+  `;
+  finishOverlay.classList.add('show');
+}
+
+function showFlash(text, color) {
+  flashMsg.textContent = text;
+  flashMsg.style.color = color;
+  flashMsg.style.transition = 'none';
+  flashMsg.style.opacity = '1';
+  flashMsg.style.transform = 'translateX(-50%) translateY(0px)';
+  requestAnimationFrame(()=>{
+    flashMsg.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+    flashMsg.style.opacity = '0';
+    flashMsg.style.transform = 'translateX(-50%) translateY(-18px)';
+  });
+}
+
+// ---------- Input: barra espaciadora / tap ----------
+function attemptPress() {
+  if (!state.running || !state.waitingForCheck) return;
+  if (isInSuccessZone(state.angle)) {
+    handleHit();
+  } else {
+    handleMiss('miss');
+  }
+}
+
+window.addEventListener('keydown', (e)=>{
+  if (e.code === 'Space') {
+    e.preventDefault();
+    attemptPress();
+  }
+});
+
+// ---------- Pausa automatica al perder el foco ----------
+// Si el usuario cambia de app, bloquea la pantalla o cambia de pestaña
+// mientras la practica esta corriendo, se detiene el bucle por completo
+// (en vez de dejarlo girando en segundo plano acumulando fallos por
+// timeout que el usuario nunca vio). Solo actua si habia una practica
+// activa (state.running); si el usuario estaba en el menu de config o
+// en un overlay de resultado, no hace nada.
+document.addEventListener('visibilitychange', ()=>{
+  if (document.hidden) {
+    if (state.running) {
+      state.pausedForFocus = true;
+      stopLoop();
+      pauseOverlay.classList.add('show');
+    }
+  }
+});
+
+function resumeFromPause() {
+  pauseOverlay.classList.remove('show');
+  state.pausedForFocus = false;
+  // se reanuda como un check nuevo (no se retoma el giro donde quedo,
+  // para evitar confundir al usuario con una aguja en una posicion vieja
+  // que no vio moverse)
+  startLoop();
+}
+
+// ---------- Zona de exclusion alrededor del boton de ajustes ----------
+// En vez de fiarse del z-index (que puede fallar si algun overlay cambia),
+// se calcula la distancia real del toque al centro del boton. Cualquier
+// toque dentro de ese radio se ignora por completo para el intento de
+// reparar, tanto si el toque origino en el boton como en el capturador.
+const hudGearEl = document.getElementById('hudGear');
+const GEAR_EXCLUSION_RADIUS = 34; // px alrededor del centro del boton, con margen de sobra
+
+function isPointNearGear(x, y) {
+  const rect = hudGearEl.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const dx = x - cx;
+  const dy = y - cy;
+  return Math.sqrt(dx*dx + dy*dy) <= GEAR_EXCLUSION_RADIUS;
+}
+
+const touchCapture = document.getElementById('touchCapture');
+
+touchCapture.addEventListener('touchstart', (e)=>{
+  const t = e.touches[0];
+  if (!t) return;
+  if (isPointNearGear(t.clientX, t.clientY)) return; // dentro de la zona libre, no cuenta
+  e.preventDefault();
+  attemptPress();
+}, {passive:false});
+
+touchCapture.addEventListener('mousedown', (e)=>{
+  if (isPointNearGear(e.clientX, e.clientY)) return;
+  attemptPress();
+});
+
+// El boton de ajustes detiene la propagacion para que su propio tap
+// nunca llegue a contarse como intento de reparar, sin importar el orden
+// de los listeners.
+hudGearEl.addEventListener('touchstart', (e)=>{ e.stopPropagation(); }, {passive:true});
+hudGearEl.addEventListener('mousedown', (e)=>{ e.stopPropagation(); });
+
+// ---------- Inicializacion ----------
+updateFreqLabel(); updateZoneLabel(); updateSpeedVarLabel(); updateRandLabel();
+needleGroup.style.opacity = '0.15';
+successArc.style.opacity = '0.15';
+document.querySelector('.presetBtn[data-preset="2"]').classList.add('active');
+</script>
+
+</body>
+</html>
